@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AILabel示例一览</title>
+    <link rel="stylesheet" href="./bootstrap.min.css">
+    <!-- 最新的 Bootstrap 核心 JavaScript 文件 -->
+    <script src="./bootstrap.min.js"></script>
+    <script src='./index.js'></script>
+
+    <style type="text/css">
+        body {
+            padding: 10px 20px;
+        }
+
+        .button-wrap {
+            padding-bottom: 10px;
+        }
+
+        #map {
+            overflow: hidden;
+            position: relative;
+            height: 600px;
+            border: 1px dashed #ccc;
+        }
+
+        .zoom-icon-wrapper {
+            position: absolute;
+            left: 20px;
+            top: 20px;
+            z-index: 1000;
+        }
+
+        .zoom-icon-plus {
+            width: 30px;
+            height: 30px;
+            line-height: 20px;
+            text-align: center;
+            border: 3px solid #6495ED;
+            font-size: 20px;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            color: #FF8C00;
+            cursor: pointer;
+        }
+
+        .zoom-icon-plus:hover {
+            border-color: #4169E1;
+        }
+
+        .zoom-icon-minus {
+            margin-top: 6px;
+            width: 30px;
+            height: 30px;
+            line-height: 20px;
+            text-align: center;
+            border: 3px solid #6495ED;
+            font-size: 25px;
+            border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+            color: #FF8C00;
+            cursor: pointer;
+        }
+
+        .zoom-icon-minus:hover {
+            border-color: #4169E1;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="button-wrap">
+        <button class="btn btn-default" onclick="setMode('PAN');">平移</button>
+        <button class="btn btn-default" onclick="setMode('MARKER');">注记</button>
+        &nbsp;&nbsp;
+        <button class="btn btn-default" onclick="setMode('POINT');">点</button>
+        <button class="btn btn-default" onclick="setMode('LINE');">线段</button>
+        <button class="btn btn-default" onclick="setMode('POLYLINE');">多段线</button>
+        <button class="btn btn-default" onclick="setMode('CIRCLE');">圆</button>
+        <button class="btn btn-default" onclick="setMode('RECT');">矩形</button>
+        <button class="btn btn-default" onclick="setMode('POLYGON');">多边形</button>
+        <button class="btn btn-default" onclick="getFeatures();">获取标注数据</button>
+        <button class="btn btn-default" onclick="exportImage('base64');">导出base64图片</button>
+        <button class="btn btn-default" onclick="exportImage('blob');">导出blob图片</button>
+        &nbsp;&nbsp;
+        <button class="btn btn-default" onclick="setMode('DRAWMASK');">涂抹</button>
+        <button class="btn btn-default" onclick="setMode('CLEARMASK');">擦除</button>
+        <button class="btn btn-default" onclick="getRle();">获取rle数据</button>
+        &nbsp;&nbsp;
+        <a href="./label/index.html" target="_blank">>>标注demo</a>
+    </div>
+
+    <div id="map">
+        <div class="zoom-icon-wrapper">
+            <div class="zoom-icon-plus" onclick="zoomIn();">+</div>
+            <div class="zoom-icon-minus" onclick="zoomOut();">-</div>
+        </div>
+    </div>
+    <br />
+    <div>注：在绘制模式（点/线/面）时，双击图形可进行选中编辑；单击未选中图形区域或切换mode模式会取消选中</div>
+
+    <script>
+        let drawingStyle = {}; // 绘制过程中样式
+        const dpr = window.devicePixelRatio;
+
+        const gMap = new AILabel.Map('map', {
+            center: {
+                x: 250,
+                y: 177
+            }, // 为了让图片居中
+            zoom: 800,
+            mode: 'PAN', // 绘制线段
+            refreshDelayWhenZooming: true, // 缩放时是否允许刷新延时，性能更优
+            zoomWhenDrawing: true,
+            panWhenDrawing: true,
+            zoomWheelRatio: 5, // 控制滑轮缩放缩率[0, 10), 值越小，则缩放越快，反之越慢
+            withHotKeys: true // 关闭快捷键
+        });
+
+        // gMap.slots.on('drawActivePoint', (point, instance) => {
+        //     instance.addCircleFeature(
+        //         {sr: 3.5, cx: point.x, cy: point.y},
+        //         {
+        //             clear: false,
+        //             style: {strokeStyle: '#00f', fillStyle: '#00f', stroke: true, fill: true, lineWidth: 1}
+        //         }
+        //     );
+        //     return false;
+        // });
+
+        // click单击事件
+        gMap.events.on('click', point => {
+            // console.log('--click--', point);
+        });
+
+        gMap.events.on('drawDone', (type, data, data1) => {
+            console.log('--type, data--', type, data);
+            if (type === 'MARKER') {
+                const marker = new AILabel.Marker(
+                    `${+new Date()}`, // id
+                    {
+                        src: './images/marker.png',
+                        position: data,
+                        offset: {
+                            x: -16,
+                            y: 32
+                        }
+                    }, // markerInfo
+                    {
+                        name: '第一个marker注记'
+                    } // props
+                );
+                marker.events.on('click', marker => {
+                    console.log('marker click');
+                    gMap.markerLayer.removeMarkerById(marker.id);
+                });
+                gMap.markerLayer.addMarker(marker);
+            } else if (type === 'POINT') {
+                const pointFeature = new AILabel.Feature.Point(
+                    `${+new Date()}`, // id
+                    {
+                        ...data,
+                        sr: 3
+                    }, // shape
+                    {
+                        name: '第一个矢量图层'
+                    }, // props
+                    drawingStyle // style
+                );
+                gFirstFeatureLayer.addFeature(pointFeature);
+            } else if (type === 'CIRCLE') {
+                // data 代表r半径shape；data1代表sr半径shape
+                const circleFeature = new AILabel.Feature.Circle(
+                    `${+new Date()}`, // id
+                    data, // data1代表屏幕坐标 shape
+                    {
+                        name: '第一个矢量图层'
+                    }, // props
+                    {
+                        fillStyle: '#F4A460',
+                        strokeStyle: '#D2691E',
+                        lineWidth: 2
+                    } // style
+                );
+                gFirstFeatureLayer.addFeature(circleFeature);
+            } else if (type === 'LINE') {
+                const scale = gMap.getScale();
+                const width = drawingStyle.lineWidth / scale;
+                const lineFeature = new AILabel.Feature.Line(
+                    `${+new Date()}`, // id
+                    {
+                        ...data,
+                        width
+                    }, // shape
+                    {
+                        name: '第一个矢量图层'
+                    }, // props
+                    drawingStyle // style
+                );
+                gFirstFeatureLayer.addFeature(lineFeature);
+            } else if (type === 'POLYLINE') {
+                const scale = gMap.getScale();
+                const width = drawingStyle.lineWidth / scale;
+                const polylineFeature = new AILabel.Feature.Polyline(
+                    `${+new Date()}`, // id
+                    {
+                        points: data,
+                        width
+                    }, // shape
+                    {
+                        name: '第一个矢量图层'
+                    }, // props
+                    drawingStyle // style
+                );
+                gFirstFeatureLayer.addFeature(polylineFeature);
+            } else if (type === 'RECT') {
+                const rectFeature = new AILabel.Feature.Rect(
+                    `${+new Date()}`, // id
+                    data, // shape
+                    {
+                        name: '矢量图形'
+                    }, // props
+                    drawingStyle // style
+                );
+                gFirstFeatureLayer.addFeature(rectFeature);
+            } else if (type === 'POLYGON') {
+                const polygonFeature = new AILabel.Feature.Polygon(
+                    `${+new Date()}`, // id
+                    {
+                        points: data
+                    }, // shape
+                    {
+                        name: '矢量图形'
+                    }, // props
+                    drawingStyle // style
+                );
+                gFirstFeatureLayer.addFeature(polygonFeature);
+            } else if (type === 'DRAWMASK') {
+                const scale = gMap.getScale();
+                const width = drawingStyle.lineWidth / scale;
+                const drawMaskAction = new AILabel.Mask.Draw(
+                    `${+new Date()}`, // id
+                    '铅笔', {
+                        points: data,
+                        width
+                    }, // shape
+                    {
+                        name: '港币',
+                        price: '1元'
+                    }, // props
+                    drawingStyle // style
+                );
+                gFirstMaskLayer.addAction(drawMaskAction);
+            } else if (type === 'CLEARMASK') {
+                const scale = gMap.getScale();
+                const width = drawingStyle.lineWidth / scale;
+                const clearMaskAction = new AILabel.Mask.Clear(
+                    `${+new Date()}`, // id
+                    {
+                        points: data,
+                        width
+                    } // shape
+                );
+                gFirstMaskLayer.addAction(clearMaskAction);
+            }
+        });
+        gMap.events.on('boundsChanged', data => {
+            // console.log('--map boundsChanged--');
+            return 2222;
+        });
+        gMap.events.on('featureSelected', feature => {
+            // console.log('--map featureSelected--', feature);
+            gMap.setActiveFeature(feature);
+        });
+        gMap.events.on('featureUnselected', () => {
+            // 取消featureSelected
+            gMap.setActiveFeature(null);
+        });
+        gMap.events.on('featureUpdated', (feature, shape) => {
+            feature.updateShape(shape);
+        });
+        gMap.events.on('featureDeleted', ({
+            id: featureId
+        }) => {
+            gFirstFeatureLayer.removeFeatureById(featureId);
+        });
+
+        // 图片层添加
+        const gFirstImageLayer = new AILabel.Layer.Image(
+            'first-layer-image', // id
+            {
+                src: '',
+                // src: './images/bg.webp',
+                width: 500,
+                height: 354,
+                crossOrigin: false, // 如果跨域图片，需要设置为true
+                position: { // 左上角相对中心点偏移量
+                    x: 0,
+                    y: 0
+                },
+                grid: { // 3 * 3
+                    columns: [{
+                        color: '#9370DB'
+                    }, {
+                        color: '#FF6347'
+                    }],
+                    rows: [{
+                        color: '#9370DB'
+                    }, {
+                        color: '#FF6347'
+                    }]
+                }
+            }, // imageInfo
+            {
+                name: '第一个图片图层'
+            }, // props
+            {
+                zIndex: 5
+            } // style
+        );
+        // 图片层相关事件监听
+        gFirstImageLayer.events.on('loadStart', (a, b) => {
+            console.log('--loadStart--', a, b);
+        });
+        gFirstImageLayer.events.on('loadEnd', (a, b) => {
+            console.log('--loadEnd--', a, b);
+        });
+        gFirstImageLayer.events.on('loadError', (a, b) => {
+            console.log('--loadError--', a, b);
+        });
+        // 添加到gMap对象
+        gMap.addLayer(gFirstImageLayer);
+
+        const gFirstFeatureLayer = new AILabel.Layer.Feature(
+            'first-layer-feature', // id
+            {
+                name: '第一个矢量图层'
+            }, // props
+            {
+                zIndex: 10
+            } // style
+        );
+        gMap.addLayer(gFirstFeatureLayer);
+        const gFirstMaskLayer = new AILabel.Layer.Mask(
+            'first-layer-mask', // id
+            {
+                name: '第一个涂抹图层'
+            }, // props
+            {
+                zIndex: 11,
+                opacity: .5
+            } // style
+        );
+        gMap.addLayer(gFirstMaskLayer);
+        const gFirstMaskImageAction = new AILabel.Mask.Image(
+            'first-image-action', // id
+            '钢笔', {
+                src: '',
+                // src: './images/mask_min.png',
+                width: 500,
+                height: 354,
+                position: { // 左上角相对中心点偏移量
+                    x: 0,
+                    y: 0
+                }
+            }, // imageInfo
+        );
+        gFirstMaskLayer.addAction(gFirstMaskImageAction);
+        const gFirstTextLayer = new AILabel.Layer.Text(
+            'first-layer-text', // id
+            {
+                name: '第一个文本图层'
+            }, // props
+            {
+                zIndex: 12,
+                opacity: 1
+            } // style
+        );
+        gMap.addLayer(gFirstTextLayer);
+
+        const gFirstText = new AILabel.Text(
+            'first-text', // id
+            {
+                text: '中华人民共和国',
+                position: {
+                    x: 300,
+                    y: 300
+                },
+                offset: {
+                    x: 0,
+                    y: 0
+                }
+            }, // shape
+            {
+                name: '第一个文本对象'
+            }, // props
+            {
+                fillStyle: '#F4A460',
+                strokeStyle: '#D2691E',
+                background: true,
+                globalAlpha: 1,
+                fontColor: '#0f0'
+            } // style
+        );
+        gFirstTextLayer.addText(gFirstText);
+
+        const gFirstFeaturePoint = new AILabel.Feature.Point(
+            'first-feature-point', // id
+            {
+                x: 250,
+                y: 177,
+                sr: 3
+            }, // shape
+            {
+                name: '第一个矢量图层'
+            }, // props
+            {
+                fillStyle: '#f00',
+                lineCap: 'round'
+            } // style
+        );
+        gFirstFeatureLayer.addFeature(gFirstFeaturePoint);
+
+        const gFirstFeatureCircle = new AILabel.Feature.Circle(
+            'first-feature-circle', // id
+            {
+                cx: 100,
+                cy: 100,
+                sr: 20
+            }, // shape
+            {
+                name: '第一个矢量图层'
+            }, // props
+            {
+                fillStyle: '#F4A460',
+                strokeStyle: '#00f',
+                lineWidth: 1,
+                stroke: true,
+                fill: false
+            } // style
+        );
+        gFirstFeatureLayer.addFeature(gFirstFeatureCircle);
+
+        const gFirstFeatureLine = new AILabel.Feature.Line(
+            'first-feature-line', // id
+            {
+                start: {
+                    x: 100,
+                    y: 150
+                },
+                end: {
+                    x: 200,
+                    y: 250
+                },
+                width: 10
+            }, // shape
+            {
+                name: '第一个矢量图层'
+            }, // props
+            {
+                strokeStyle: '#FF4500',
+                lineCap: 'round'
+            } // style
+        );
+        gFirstFeatureLayer.addFeature(gFirstFeatureLine);
+        const gFirstFeatureRect = new AILabel.Feature.Rect(
+            'first-feature-rect', // id
+            {
+                x: 200,
+                y: 50,
+                width: 100,
+                height: 100
+            }, // shape
+            {
+                name: '第一个矢量图层'
+            }, // props
+            {
+                strokeStyle: '#00f',
+                lineWidth: 1,
+                fillStyle: '#00f',
+                globalAlpha: .3,
+                fill: true
+            } // style
+        );
+        gFirstFeatureLayer.addFeature(gFirstFeatureRect);
+        const gFirstFeaturePolygon = new AILabel.Feature.Polygon(
+            'first-feature-polygon', // id
+            {
+                points: [{
+                        x: 367,
+                        y: 161
+                    }, {
+                        x: 371,
+                        y: 220
+                    }, {
+                        x: 412,
+                        y: 241
+                    },
+                    {
+                        x: 474,
+                        y: 210
+                    }, {
+                        x: 467,
+                        y: 151
+                    }, {
+                        x: 426,
+                        y: 124
+                    }
+                ]
+            }, // shape
+            {
+                name: '第一个多边形'
+            }, // props
+            {
+                strokeStyle: '#0000FF',
+                lineWidth: 1
+            } // style
+        );
+        gFirstFeatureLayer.addFeature(gFirstFeaturePolygon);
+
+        const gFirstMarker = new AILabel.Marker(
+            'first-marker', // id
+            {
+                src: '',
+                // src: './images/marker.png',
+                position: { // 左上角相对中心点偏移量
+                    x: 250,
+                    y: 177
+                },
+                offset: {
+                    x: -16,
+                    y: 32
+                }
+            }, // markerInfo
+            {
+                name: '第一个marker注记'
+            } // props
+        );
+        gFirstMarker.events.on('mouseDown', marker => {
+            console.log('marker mouseDown');
+        });
+        gFirstMarker.events.on('mouseUp', marker => {
+            console.log('marker mouseUp');
+        });
+        gFirstMarker.events.on('mouseOver', marker => {
+            console.log('marker mouseOver');
+        });
+        gFirstMarker.events.on('mouseOut', marker => {
+            console.log('marker mouseOut');
+        });
+        gFirstMarker.events.on('dragStart', marker => {
+            console.log('marker dragStart');
+        });
+        gFirstMarker.events.on('dragging', marker => {
+            console.log('marker dragging');
+        });
+        gFirstMarker.events.on('dragEnd', (marker, newPosition) => {
+            console.log('marker dragEnd');
+            marker.updatePosition(newPosition);
+        });
+        gFirstMarker.events.on('rightClick', marker => {
+            console.log('marker click');
+            gMap.markerLayer.removeMarkerById(marker.id);
+        });
+        gFirstMarker.enableDragging();
+        gMap.markerLayer.addMarker(gFirstMarker);
+
+        console.log('--AILabel--', AILabel);
+
+        function zoomIn() {
+            gMap.zoomIn();
+        }
+
+        function zoomOut() {
+            gMap.zoomOut();
+        }
+
+        function getRle() {
+            const rleData = gFirstMaskLayer.getRleData({
+                x: 0,
+                y: 0,
+                width: 500,
+                height: 354
+            });
+            console.log('--rleData--', rleData);
+        }
+
+        function setMode(mode) {
+            gMap.setMode(mode);
+            // 后续对应模式处理
+            switch (gMap.mode) {
+                case 'PAN': {
+                    break;
+                }
+                case 'MARKER': {
+                    // 忽略
+                    break;
+                }
+                case 'POINT': {
+                    drawingStyle = {
+                        fillStyle: '#9370DB'
+                    };
+                    gMap.setDrawingStyle(drawingStyle);
+                    break;
+                }
+                case 'CIRCLE': {
+                    drawingStyle = {
+                        fillStyle: '#9370DB',
+                        strokeStyle: '#0000FF',
+                        lineWidth: 2
+                    };
+                    gMap.setDrawingStyle(drawingStyle);
+                    break;
+                }
+                case 'LINE': {
+                    drawingStyle = {
+                        strokeStyle: '#FF00FF',
+                        lineJoin: 'round',
+                        lineCap: 'round',
+                        lineWidth: 10,
+                        arrow: false
+                    };
+                    gMap.setDrawingStyle(drawingStyle);
+                    break;
+                }
+                case 'POLYLINE': {
+                    drawingStyle = {
+                        strokeStyle: '#FF1493',
+                        lineJoin: 'round',
+                        lineCap: 'round',
+                        lineWidth: 10
+                    }
+                    gMap.setDrawingStyle(drawingStyle);
+                    break;
+                }
+                case 'RECT': {
+                    drawingStyle = {
+                        strokeStyle: '#0f0',
+                        lineWidth: 1
+                    }
+                    gMap.setDrawingStyle(drawingStyle);
+                    break;
+                }
+                case 'POLYGON': {
+                    drawingStyle = {
+                        strokeStyle: '#00f',
+                        fillStyle: '#0f0',
+                        globalAlpha: .3,
+                        lineWidth: 1,
+                        fill: true,
+                        stroke: true
+                    }
+                    gMap.setDrawingStyle(drawingStyle);
+                    break;
+                }
+                case 'DRAWMASK': {
+                    drawingStyle = {
+                        strokeStyle: 'rgba(255, 0, 0, .5)',
+                        fillStyle: '#00f',
+                        lineWidth: 50
+                    }
+                    gMap.setDrawingStyle(drawingStyle);
+                    break;
+                }
+                case 'CLEARMASK': {
+                    drawingStyle = {
+                        fillStyle: '#00f',
+                        lineWidth: 30
+                    }
+                    gMap.setDrawingStyle(drawingStyle);
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+
+        // 导出图片上护具
+        async function exportImage(type) {
+            const imagedata = await gMap.exportLayersToImage({
+                x: 0,
+                y: 0,
+                width: 500,
+                height: 354
+            }, {
+                type,
+                format: 'image/png'
+            });
+
+            const imageDom = new Image();
+            if (type === 'base64') {
+                // 导出base64格式
+                imageDom.src = imagedata;
+            } else {
+                // 导出blob格式
+                const url = URL.createObjectURL(imagedata);
+                imageDom.src = url;
+                imageDom.onload = () => {
+                    URL.revokeObjectURL(url);
+                }
+            }
+
+            let aLink = document.createElement('a');
+            aLink.style.display = 'none';
+            aLink.href = imageDom.src;
+            aLink.download = 'export.png';
+            // 触发点击-然后移除
+            document.body.appendChild(aLink);
+            aLink.click();
+            document.body.removeChild(aLink);
+        }
+
+        // 获取所有features
+        function getFeatures() {
+            const allFeatures = gFirstFeatureLayer.getAllFeatures();
+            console.log('--allFeatures--', allFeatures);
+        }
+
+        // 实例销毁
+        function destroy() {
+            gMap.destroy();
+        }
+
+        window.onresize = function () {
+            gMap && gMap.resize();
+        }
+    </script>
+
+
+
+    <!-- 百度统计代码添加 -->
+    <script>
+        var _hmt = _hmt || [];
+        (function () {
+            var hm = document.createElement("script");
+            hm.src = "https://hm.baidu.com/hm.js?d662d8c3f35f9f124a998a7dd5e24835";
+            var s = document.getElementsByTagName("script")[0];
+            s.parentNode.insertBefore(hm, s);
+        })();
+    </script>
+</body>
+
+</html>
